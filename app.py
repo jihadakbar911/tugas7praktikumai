@@ -2,23 +2,12 @@ from flask import Flask, render_template, request
 import numpy as np
 import joblib
 from tensorflow.keras.models import load_model
-import os
-import logging
-
-logging.basicConfig(level=logging.INFO)
 
 app = Flask(__name__)
 
-# Load model dan scaler sesuai urutan dan preprocessing di train_model.py
+# Load model dan scaler
 model = load_model('model.h5')
 scaler = joblib.load('scaler.pkl')
-
-# Urutan fitur harus sama persis dengan train_model.py
-FEATURES = [
-    'diet_Omn', 'diet_Veg', 'diet_Vegt', 'fruit', 'fat_meat',
-    'homecooked', 'vegetable', 'alcohol', 'dessert', 'milk',
-    'water', 'snack', 'red_meat'
-]
 
 @app.route('/')
 def index():
@@ -26,31 +15,22 @@ def index():
 
 @app.route('/predict', methods=['POST'])
 def predict():
-    # Ambil input dari form sesuai urutan fitur
-    input_data = []
-    for f in FEATURES:
-        value = request.form.get(f, type=float)
-        if value is None:
-            # fallback jika ada field kosong
-            value = 0.0
-        input_data.append(value)
+    # Ambil input dari form
+    input_data = [float(request.form[f]) for f in [
+        'diet_Omn', 'diet_Veg', 'diet_Vegt', 'fruit', 'fat_meat',
+        'homecooked', 'vegetable', 'alcohol', 'dessert', 'milk',
+        'water', 'snack', 'red_meat'
+    ]]
 
-    # Ubah ke array numpy dan reshape
-    input_array = np.array(input_data).reshape(1, -1)
-
-    # Skala data sesuai scaler dari train_model.py
-    scaled_input = scaler.transform(input_array)
-
-    # Prediksi dengan model
+    # Normalisasi dan prediksi
+    scaled_input = scaler.transform([input_data])
     prediction = model.predict(scaled_input)
-    prob = float(prediction[0][0])
-    predicted_label = int(prob > 0.5)
-
+    predicted_label = int(prediction[0][0] > 0.5)
+    
     hasil = "BERISIKO ASAM LAMBUNG" if predicted_label == 1 else "TIDAK BERISIKO"
-    probabilitas = f"{prob*100:.2f}%"
+    probabilitas = f"{prediction[0][0]*100:.2f}%"
 
     return render_template('result.html', hasil=hasil, probabilitas=probabilitas)
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5000))
-    app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=True)
